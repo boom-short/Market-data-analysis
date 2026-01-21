@@ -1,37 +1,42 @@
-name: Wingo Enterprise Scraper
+name: Wingo Enterprise Scraper 2026
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # প্রতি ৩০ মিনিট পর পর বড় ডাটা সিঙ্ক করবে
-  workflow_dispatch:
+    - cron: '*/15 * * * *' # প্রতি ১৫ মিনিট অন্তর ডাটা সংগ্রহ করবে
+  workflow_dispatch: # আপনার প্রয়োজন হলে মোবাইল থেকে ম্যানুয়ালি রান করতে পারবেন
 
 jobs:
-  build_and_scrape:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install Enterprise Tools
+      - name: Install Advanced Scraping Tools
         run: |
-          pip install playwright
-          playwright install chromium --with-deps
+          pip install curl_cffi
 
-      - name: Execute Scraper
+      - name: Run Advanced Scraper
         run: python scraper.py
 
-      - name: Commit Records
+      - name: Commit and Push Changes
         run: |
           git config --global user.name "Market-Analyzer-Bot"
           git config --global user.email "bot@market.com"
-          git add wingo_history.json
-          git commit -m "Automated Market Update: $(date)" || echo "No changes"
-          git push
+          
+          # শুধুমাত্র পরিবর্তন থাকলেই পুশ করবে
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git add wingo_history.json
+            git commit -m "Update Market History: $(date)"
+            git push
+          else
+            echo "No new draw data found."
+          fi
           
