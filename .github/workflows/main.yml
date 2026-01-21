@@ -1,42 +1,37 @@
-name: Wingo Enterprise Scraper 2026
+name: Wingo Ultra-Analyzer 2026
 
 on:
   schedule:
-    - cron: '*/15 * * * *' # প্রতি ১৫ মিনিট অন্তর ডাটা সংগ্রহ করবে
-  workflow_dispatch: # আপনার প্রয়োজন হলে মোবাইল থেকে ম্যানুয়ালি রান করতে পারবেন
+    - cron: '*/10 * * * *' # প্রতি ১০ মিনিট অন্তর চলবে
+  workflow_dispatch:
 
 jobs:
-  build:
+  analyze:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Python Environment Setup
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
+          cache: 'pip'
 
-      - name: Install Advanced Scraping Tools
+      - name: Install Dependencies
         run: |
-          pip install curl_cffi
+          pip install curl_cffi pandas numpy statistics
 
-      - name: Run Advanced Scraper
-        run: python scraper.py
+      - name: Execute Smart Scraper & AI Analyzer
+        run: python core_engine.py
 
-      - name: Commit and Push Changes
+      - name: Auto-Sync Database
         run: |
-          git config --global user.name "Market-Analyzer-Bot"
-          git config --global user.email "bot@market.com"
-          
-          # শুধুমাত্র পরিবর্তন থাকলেই পুশ করবে
-          if [[ -n "$(git status --porcelain)" ]]; then
-            git add wingo_history.json
-            git commit -m "Update Market History: $(date)"
-            git push
-          else
-            echo "No new draw data found."
-          fi
+          git config --global user.name "Wingo-AI-Bot"
+          git config --global user.email "ai-bot@wingo-enterprise.com"
+          git add data/*.json reports/*.md
+          git commit -m "AI Update: $(date +'%Y-%m-%d %H:%M:%S') [Automated]" || echo "No changes"
+          git push
           
