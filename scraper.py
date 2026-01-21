@@ -6,123 +6,116 @@ import pandas as pd
 from curl_cffi import requests
 from datetime import datetime
 
-# ফোল্ডার তৈরি
+# প্রজেক্ট ডিরেক্টরি সেটআপ
 os.makedirs('data', exist_ok=True)
 os.makedirs('reports', exist_ok=True)
 
-class WingoEnterprise:
+class WingoEnterpriseBot:
     def __init__(self):
-        # অফিশিয়াল ড্র এপিআই
-        self.url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
-        self.db_path = "data/wingo_master_history.json"
-        self.report_path = "reports/market_summary.md"
-        # ব্রাউজার ইম্পার্সোনেশন লিস্ট (বট ডিটেকশন এড়াতে)
-        self.browsers = ["chrome110", "chrome120", "edge101", "safari_ios_16_0"]
+        self.api_url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
+        self.history_file = "data/wingo_master_history.json"
+        self.report_file = "reports/live_analysis.md"
+        # শক্তিশালী ব্রাউজার ফিঙ্গারপ্রিন্ট লিস্ট
+        self.impersonate_list = ["chrome110", "chrome120", "edge101", "safari_ios_16_0"]
 
-    def get_headers(self):
-        return {
+    def fetch_data(self):
+        payload = {"pageIndex": 1, "pageSize": 50, "type": 30}
+        headers = {
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json;charset=UTF-8",
-            "User-Agent": f"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
             "Origin": "https://draw.ar-lottery01.com",
             "Referer": "https://draw.ar-lottery01.com/"
         }
 
-    def fetch_data(self):
-        payload = {"pageIndex": 1, "pageSize": 50, "type": 30}
-        
         try:
-            print(f"[{datetime.now()}] Attempting to fetch data...")
-            # সেশন ব্যবহার করা হচ্ছে যাতে কুকি এবং কানেকশন বজায় থাকে
+            print(f"[{datetime.now()}] Initializing request...")
+            # সেশন ব্যবহার করে TLS Fingerprint সিমুলেট করা
             with requests.Session() as s:
                 response = s.post(
-                    self.url,
+                    self.api_url,
                     json=payload,
-                    headers=self.get_headers(),
-                    impersonate=random.choice(self.browsers),
+                    headers=headers,
+                    impersonate=random.choice(self.impersonate_list),
                     timeout=30
                 )
-            
+
             if response.status_code == 200:
-                data = response.json()
-                if 'data' in data and 'list' in data['data']:
-                    return data['data']['list']
-            
-            print(f"Error: Received Status Code {response.status_code}")
+                json_data = response.json()
+                if 'data' in json_data and 'list' in json_data['data']:
+                    return json_data['data']['list']
+                print("API Error: Data structure unexpected.")
+            else:
+                print(f"Failed to bypass. Status Code: {response.status_code}")
             return None
         except Exception as e:
-            print(f"Connection Failed: {e}")
+            print(f"System Error: {e}")
             return None
 
-    def process_data(self, new_items):
-        if not new_items:
-            return
+    def process_and_report(self, new_items):
+        if not new_items: return
 
-        # আগের ডাটা লোড করা
+        # পুরনো ডাটা লোড করা
         history = []
-        if os.path.exists(self.db_path):
+        if os.path.exists(self.history_file):
             try:
-                with open(self.db_path, "r", encoding="utf-8") as f:
+                with open(self.history_file, "r", encoding="utf-8") as f:
                     history = json.load(f)
-            except:
-                history = []
+            except: history = []
 
-        # ডুপ্লিকেট চেক (Issue Number দিয়ে)
-        existing_ids = {str(x.get('issueNumber')) for x in history}
-        new_entries = 0
-        
+        # নতুন ডাটা মার্জ করা (ডুপ্লিকেট চেক করে)
+        existing_ids = {str(item['issueNumber']) for item in history if 'issueNumber' in item}
+        added = 0
         for item in new_items:
-            if str(item.get('issueNumber')) not in existing_ids:
+            if str(item['issueNumber']) not in existing_ids:
                 history.append(item)
-                new_entries += 1
+                added += 1
 
-        if new_entries == 0:
-            print("No new draw data to save.")
+        if added == 0:
+            print("Database is already up to date.")
             return
 
-        # সর্টিং এবং লিমিটিং (লেটেস্ট ২০,০০০ ডাটা রাখা হবে)
-        history = sorted(history, key=lambda x: str(x.get('issueNumber')), reverse=True)[:20000]
+        # সর্টিং (লেটেস্ট ডাটা আগে) এবং ১০,০০০ ডাটা সেভ রাখা
+        history = sorted(history, key=lambda x: str(x['issueNumber']), reverse=True)[:10000]
 
-        # ডাটাবেজ আপডেট
-        with open(self.db_path, "w", encoding="utf-8") as f:
-            json.dump(history, f, indent=2, ensure_ascii=False)
+        with open(self.history_file, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=4, ensure_ascii=False)
 
-        print(f"Success! Added {new_entries} new entries.")
-        self.generate_ai_report(history)
+        print(f"Successfully added {added} records.")
+        self.generate_markdown_report(history)
 
-    def generate_ai_report(self, history):
-        """ডাটা থেকে মার্কেট ইনসাইট তৈরি করা"""
+    def generate_markdown_report(self, history):
         df = pd.DataFrame(history)
         
-        # লেটেস্ট ১০টি ড্র রেজাল্ট
-        latest_table = df.head(10)[['issueNumber', 'number', 'colour']].to_markdown(index=False)
+        # ১. টেবিল ফরম্যাটে লেটেস্ট ১০টি ড্র
+        latest_draws = df.head(10)[['issueNumber', 'number', 'colour']].to_markdown(index=False)
         
-        # পরিসংখ্যান (গত ১০০ ড্র)
-        last_100 = df.head(100)
-        color_stats = last_100['colour'].value_counts(normalize=True) * 100
+        # ২. স্ট্যাটিস্টিকস (গত ১০০ ড্র-এর উপর ভিত্তি করে)
+        stats_data = df.head(100)
+        color_dist = stats_data['colour'].value_counts(normalize=True) * 100
         
-        report_content = f"""
-# 📊 Wingo Market Intelligence (Enterprise)
+        report = f"""
+# 🚀 Wingo Enterprise Intelligence Report
 **Last Sync:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-### 🕒 Latest 10 Draws
-{latest_table}
+### 📊 Latest Market Activity (Top 10)
+{latest_draws}
 
-### 📈 Probability Analysis (Last 100 Games)
-- **Green:** {color_stats.get('green', 0):.2f}%
-- **Red:** {color_stats.get('red', 0):.2f}%
-- **Violet:** {color_stats.get('violet', 0):.2f}%
+### 📈 Probability Trends (Last 100 Games)
+- **🔴 Red:** {color_dist.get('red', 0):.1f}%
+- **🟢 Green:** {color_dist.get('green', 0):.1f}%
+- **🟣 Violet:** {color_dist.get('violet', 0):.1f}%
 
 ---
-*Status: Advanced Scraper active with TLS Fingerprinting.*
+*Powered by AI Market Scraper 2026*
 """
-        with open(self.report_path, "w", encoding="utf-8") as f:
-            f.write(report_content)
+        with open(self.report_file, "w", encoding="utf-8") as f:
+            f.write(report)
 
 if __name__ == "__main__":
-    # বট ডিটেকশন এড়াতে র‍্যান্ডম বিরতি
-    time.sleep(random.uniform(3, 8))
-    bot = WingoEnterprise()
-    raw_data = bot.fetch_data()
-    bot.process_data(raw_data)
-        
+    # অ্যান্টি-বট ডিলে (৩-১০ সেকেন্ড)
+    time.sleep(random.randint(3, 10))
+    bot = WingoEnterpriseBot()
+    data = bot.fetch_data()
+    bot.process_and_report(data)
+    
