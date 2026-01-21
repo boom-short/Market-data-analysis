@@ -2,85 +2,117 @@ import json
 import os
 import time
 import random
+import pandas as pd
 from curl_cffi import requests
+from datetime import datetime
 
-def fetch_wingo_data():
-    # উইনগো অফিশিয়াল এপিআই লিঙ্ক
-    url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
-    
-    # হুবহু ব্রাউজারের হেডার নকল করা
-    headers = {
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Content-Type": "application/json;charset=UTF-8",
-        "Origin": "https://draw.ar-lottery01.com",
-        "Referer": "https://draw.ar-lottery01.com/",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    
-    # ড্র ডাটার জন্য দরকারি প্যারামিটার
-    payload = {"pageIndex": 1, "pageSize": 50, "type": 30}
+# ডিরেক্টরি সেটআপ
+os.makedirs('data', exist_ok=True)
+os.makedirs('reports', exist_ok=True)
 
-    try:
-        # impersonate="chrome120" হলো এই প্রজেক্টের আসল শক্তি
-        # এটি TLS Fingerprint পরিবর্তন করে ক্লাউডফেয়ারকে বোকা বানায়
-        print("Fetching data from API...")
-        response = requests.post(
-            url, 
-            json=payload, 
-            headers=headers, 
-            impersonate="chrome120", 
-            timeout=30
-        )
+class WingoEnterprise:
+    def __init__(self):
+        self.url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
+        self.file_path = "data/wingo_master_history.json"
+        # বিভিন্ন ব্রাউজার প্রোফাইল থেকে র‍্যান্ডম চয়েস (বট ডিটেকশন এড়াতে)
+        self.impersonates = ["chrome110", "chrome120", "edge101", "safari_ios_16_0"]
+
+    def get_dynamic_headers(self):
+        return {
+            "Accept": "application/json, text/plain, */*",
+            "Content-Type": "application/json;charset=UTF-8",
+            "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(110, 122)}.0.0.0 Safari/537.36",
+            "X-Requested-With": "XMLHttpRequest",
+            "Origin": "https://draw.ar-lottery01.com",
+            "Referer": "https://draw.ar-lottery01.com/"
+        }
+
+    def fetch_data(self):
+        payload = {"pageIndex": 1, "pageSize": 50, "type": 30}
         
-        if response.status_code == 200:
-            new_data = response.json()
-            if 'data' in new_data:
-                update_history_file(new_data['data']['list'])
-                print("Successfully updated history.")
-            else:
-                print("API responded but no data found.")
-        else:
-            print(f"Failed! Status Code: {response.status_code}")
-            # যদি এখনও ৪০৩ আসে, তবে স্ক্রিপ্ট ফাইলটিতে এরর সেভ করবে
-            with open("wingo_history.json", "w") as f:
-                json.dump({"status": "error", "code": response.status_code}, f)
-
-    except Exception as e:
-        print(f"System Error: {e}")
-
-def update_history_file(new_items):
-    file_path = "wingo_history.json"
-    history = []
-
-    # আগের জমানো ডাটা পড়া
-    if os.path.exists(file_path):
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            # সেশন ব্যবহার করে কুকি হ্যান্ডেল করা
+            with requests.Session() as s:
+                response = s.post(
+                    self.url,
+                    json=payload,
+                    headers=self.get_dynamic_headers(),
+                    impersonate=random.choice(self.impersonates),
+                    timeout=30
+                )
+            
+            if response.status_code == 200:
+                raw_res = response.json()
+                if 'data' in raw_res:
+                    return raw_res['data']['list']
+            print(f"Warning: Status Code {response.status_code}")
+            return None
+        except Exception as e:
+            print(f"Critical Error: {e}")
+            return None
+
+    def process_and_analyze(self, new_data):
+        if not new_data: return
+
+        # লোড বর্তমান ডাটা
+        history = []
+        if os.path.exists(self.file_path):
+            with open(self.file_path, "r") as f:
                 history = json.load(f)
-                if not isinstance(history, list): history = []
-        except:
-            history = []
 
-    # ডুপ্লিকেট চেক করে নতুন ডাটা যোগ করা
-    existing_issues = {str(item['issueNumber']) for item in history if 'issueNumber' in item}
-    
-    added_count = 0
-    for item in new_items:
-        if str(item['issueNumber']) not in existing_issues:
-            history.append(item)
-            added_count += 1
-    
-    # সর্টিং এবং লেটেস্ট ১০০০০ ডাটা লিমিট (ভবিষ্যতের অ্যানালাইসিসের জন্য বড় ডাটাবেজ)
-    history = sorted(history, key=lambda x: str(x.get('issueNumber', '')), reverse=True)[:10000]
+        # নতুন ডাটা মার্জ করা
+        existing_ids = {str(x['issueNumber']) for x in history}
+        updated = False
+        for item in new_data:
+            if str(item['issueNumber']) not in existing_ids:
+                history.append(item)
+                updated = True
 
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(history, f, indent=4, ensure_ascii=False)
-    
-    print(f"Added {added_count} new entries.")
+        if not updated:
+            print("No new trends found.")
+            return
+
+        # সর্টিং (লেটেস্ট ডাটা আগে)
+        history = sorted(history, key=lambda x: str(x['issueNumber']), reverse=True)[:20000]
+
+        with open(self.file_path, "w") as f:
+            json.dump(history, f, indent=2)
+
+        self.generate_market_report(history)
+
+    def generate_market_report(self, history):
+        """ডাটা থেকে মার্কেট ট্রেন্ড অ্যানালাইসিস করা"""
+        df = pd.DataFrame(history)
+        
+        # লেটেস্ট ১০টি ড্র-এর ট্রেন্ড
+        latest_results = df.head(10)[['issueNumber', 'number', 'colour']].to_markdown()
+        
+        # কালার ফ্রিকোয়েন্সি
+        color_counts = df.head(100)['colour'].value_counts().to_dict()
+        
+        report = f"""
+# 📊 Wingo Enterprise Market Intelligence Report
+**Last Updated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+### 🚀 Recent Draw History (Top 10)
+{latest_results}
+
+### 📈 Probability Analysis (Last 100 Draws)
+- **Red:** {color_counts.get('red', 0)}%
+- **Green:** {color_counts.get('green', 0)}%
+- **Violet:** {color_counts.get('violet', 0)}%
+
+---
+*Generated by Wingo-AI-Bot (v2.0)*
+        """
+        with open("reports/market_summary.md", "w") as f:
+            f.write(report)
+        print("Report Generated Successfully.")
 
 if __name__ == "__main__":
-    # বট ডিটেকশন এড়াতে ১-১০ সেকেন্ডের রেন্ডম ওয়েট
-    time.sleep(random.randint(1, 10))
-    fetch_wingo_data()
-    
+    bot = WingoEnterprise()
+    # স্মার্ট ওয়েট
+    time.sleep(random.uniform(2.5, 7.5))
+    data = bot.fetch_data()
+    bot.process_and_analyze(data)
+                
