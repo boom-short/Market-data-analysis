@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 
 # উইনগো ডাটা সোর্স (আপনার API বা URL এখানে দিন)
-URL = "YOUR_WINGO_API_ENDPOINT" 
+API_URL = 'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage. 
 
 def fetch_data():
     response = requests.get(URL)
