@@ -6,70 +6,85 @@ import pandas as pd
 from curl_cffi import requests
 from datetime import datetime
 
-# ফোল্ডার অটো-জেনারেশন
+# ডিরেক্টরি সেটআপ
 os.makedirs('data', exist_ok=True)
 os.makedirs('reports', exist_ok=True)
 
-class EnterpriseScraper:
+class UltraStealthScraper:
     def __init__(self):
         self.target_url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
         self.db_path = "data/wing_history.json"
         self.report_path = "reports/market_analysis.md"
-        # শুধুমাত্র সাপোর্টেড প্রোফাইলগুলো রাখা হয়েছে
-        self.profiles = ["chrome110", "chrome120", "edge101", "safari_ios_16_0"]
+        # শুধুমাত্র স্থিতিশীল প্রোফাইল
+        self.profiles = ["chrome110", "chrome120", "edge101"]
 
-    def get_dynamic_headers(self):
+    def get_free_proxies(self):
+        """ইন্টারনেট থেকে কিছু ফ্রি প্রক্সি লিস্ট সংগ্রহ করার চেষ্টা করে"""
+        try:
+            # এটি একটি পাবলিক প্রক্সি লিস্ট এপিআই
+            res = requests.get("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all")
+            if res.status_code == 200:
+                return res.text.strip().split('\r\n')
+        except:
+            return []
+        return []
+
+    def get_headers(self):
         return {
             "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "en-US,en;q=0.9",
             "Content-Type": "application/json;charset=UTF-8",
             "Origin": "https://draw.ar-lottery01.com",
             "Referer": "https://draw.ar-lottery01.com/",
-            "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(120, 124)}.0.0.0 Safari/537.36",
+            "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(120, 125)}.0.0.0 Safari/537.36",
             "X-Requested-With": "XMLHttpRequest"
         }
 
     def fetch_data(self):
         payload = {"pageIndex": 1, "pageSize": 50, "type": 30}
+        proxies_list = self.get_free_proxies()
         
-        # ব্লকিং এড়াতে ৫ বার ভিন্ন ভিন্ন কৌশলে চেষ্টা করবে
-        for attempt in range(5):
+        print(f"Found {len(proxies_list)} potential proxies. Starting bypass...")
+
+        for attempt in range(10):  # ১০ বার আলাদা আলাদা প্রক্সি দিয়ে চেষ্টা করবে
+            proxy = random.choice(proxies_list) if proxies_list else None
+            proxy_dict = {"http": f"http://{proxy}", "https": f"http://{proxy}"} if proxy else None
+            
             try:
-                print(f"[{datetime.now()}] Attempt {attempt+1}: Accessing API...")
+                print(f"[{datetime.now()}] Attempt {attempt+1} using Proxy: {proxy if proxy else 'Direct'}")
                 
-                # সেশন এবং প্রক্সি হ্যান্ডলিং
                 with requests.Session() as s:
-                    # মেইন সাইট ভিজিট করে কুকি নেওয়া
+                    # ১. হোমপেজে হিট করে নিজেকে মানুষ প্রমাণ করা
                     s.get("https://draw.ar-lottery01.com/", 
-                          impersonate=random.choice(self.profiles), 
-                          timeout=20)
+                          impersonate=random.choice(self.profiles),
+                          proxies=proxy_dict,
+                          timeout=15)
                     
-                    time.sleep(random.uniform(5, 10)) # মানুষের মতো বিরতি
+                    time.sleep(random.uniform(3, 7))
                     
+                    # ২. আসল ডাটা রিকোয়েস্ট
                     response = s.post(
                         self.target_url,
                         json=payload,
-                        headers=self.get_dynamic_headers(),
+                        headers=self.get_headers(),
                         impersonate=random.choice(self.profiles),
-                        timeout=30
+                        proxies=proxy_dict,
+                        timeout=20
                     )
 
                 if response.status_code == 200:
-                    res_json = response.json()
-                    if 'data' in res_json and res_json['data']['list']:
-                        return res_json['data']['list']
+                    data = response.json()
+                    if 'data' in data and data['data']['list']:
+                        return data['data']['list']
                 
-                elif response.status_code == 403:
-                    print("⚠️ 403 Forbidden: IP is blocked by Cloudflare. Trying to wait longer...")
-                
-                time.sleep(random.randint(10, 20)) 
+                print(f"Failed with Status {response.status_code}. Trying next proxy...")
             except Exception as e:
-                print(f"Request Error on attempt {attempt+1}: {e}")
+                print(f"Proxy error: {e}")
+                continue
         return None
 
     def save_and_process(self, new_data):
         if not new_data:
-            print("❌ Failure: Could not bypass security. Check if the site is under high protection.")
+            print("❌ All attempts failed. Cloudflare is blocking GitHub IPs heavily.")
             return
 
         history = []
@@ -86,27 +101,24 @@ class EnterpriseScraper:
                 history.append(item)
                 added += 1
 
-        if added == 0:
-            print("ℹ️ Status: No new draws found.")
-            return
-
-        history = sorted(history, key=lambda x: str(x.get('issueNumber')), reverse=True)[:10000]
-        with open(self.db_path, "w", encoding="utf-8") as f:
-            json.dump(history, f, indent=4, ensure_ascii=False)
-
-        print(f"✅ Success: Added {added} new records.")
-        self.generate_report(history)
+        if added > 0:
+            history = sorted(history, key=lambda x: str(x.get('issueNumber')), reverse=True)[:10000]
+            with open(self.db_path, "w", encoding="utf-8") as f:
+                json.dump(history, f, indent=4, ensure_ascii=False)
+            print(f"✅ Success! {added} new records added.")
+            self.generate_report(history)
+        else:
+            print("ℹ️ No new data found.")
 
     def generate_report(self, history):
         df = pd.DataFrame(history)
-        latest_results = df.head(15)[['issueNumber', 'number', 'colour']].to_markdown(index=False)
-        
-        report = f"# 🚀 Wingo Live Market Report\n**Update:** {datetime.now()}\n\n{latest_results}"
+        latest_draws = df.head(15)[['issueNumber', 'number', 'colour']].to_markdown(index=False)
+        report = f"# 🚀 Wingo Enterprise Live Report\n**Update:** {datetime.now()}\n\n{latest_draws}"
         with open(self.report_path, "w", encoding="utf-8") as f:
             f.write(report)
 
 if __name__ == "__main__":
-    bot = EnterpriseScraper()
+    bot = UltraStealthScraper()
     data = bot.fetch_data()
     bot.save_and_process(data)
-    
+                    
