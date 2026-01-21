@@ -32,13 +32,13 @@ jobs:
           git config --global user.name "Market-Analyzer-Bot"
           git config --global user.email "bot@market-data.com"
           
-          # Forcefully add data and reports folders
-          git add -A
+          # Forcefully add folders even if they are new
+          git add data/ reports/ wing_history.json 2>/dev/null || true
           
           if [[ -n "$(git status --porcelain)" ]]; then
             git commit -m "Auto-Sync: $(date +'%Y-%m-%d %H:%M:%S')"
             git push
           else
-            echo "No new data found to commit."
+            echo "No new changes detected."
           fi
           
