@@ -1,17 +1,17 @@
-name: Wingo Final Scraper
+name: Wingo Smart Scraper
 
 on:
   schedule:
-    - cron: '*/10 * * * *' # প্রতি ১০ মিনিট অন্তর চলবে
-  workflow_dispatch: # হাতে চালানোর অপশন
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 jobs:
-  scrape_and_push:
+  scrape:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v3
 
       - name: Setup Python
@@ -19,26 +19,19 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install System Dependencies
+      - name: Install Dependencies
         run: |
-          pip install playwright
+          pip install playwright requests
           playwright install chromium --with-deps
 
-      - name: Run Python Scraper
+      - name: Run Scraper
         run: python scraper.py
 
-      - name: Save and Commit Data
+      - name: Commit and Push
         run: |
           git config --global user.name "Wingo-Bot"
           git config --global user.email "bot@github.com"
-          
-          # ফাইল তৈরি হয়েছে কি না দেখে পুশ করা
-          if [ -f wingo_history.json ]; then
-            git add wingo_history.json
-            git commit -m "Live Market Data Update: $(date)" || echo "No changes to commit"
-            git push
-          else
-            echo "Error: wingo_history.json was not created."
-            exit 1
-          fi
+          git add wingo_history.json
+          git commit -m "Smart Proxy Update: $(date)" || echo "No changes"
+          git push
           
