@@ -6,115 +6,116 @@ import pandas as pd
 from curl_cffi import requests
 from datetime import datetime
 
-# ১. অটোমেটিক ফোল্ডার তৈরি (আপনার ডাটা এখানে জমা হবে)
+# ১. অটো ফোল্ডার জেনারেশন (Data tracking এর জন্য)
 os.makedirs('data', exist_ok=True)
 os.makedirs('reports', exist_ok=True)
 
-class WingoEnterpriseBot:
+class EnterpriseScraper:
     def __init__(self):
-        self.api_url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
-        self.history_file = "data/wing_history.json"
-        self.report_file = "reports/market_analysis.md"
-        # উন্নত সিকিউরিটি ফিঙ্গারপ্রিন্ট
-        self.browsers = ["chrome110", "chrome120", "edge101", "safari_ios_16_0"]
+        self.target_url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
+        self.db_path = "data/wing_history.json"
+        self.report_path = "reports/market_analysis.md"
+        # শক্তিশালী ব্রাউজার ফিঙ্গারপ্রিন্ট প্রোফাইল
+        self.profiles = ["chrome110", "chrome120", "edge101", "safari_ios_16_0"]
 
-    def get_secure_headers(self):
+    def get_headers(self):
+        # রিয়েল হিউম্যান ব্রাউজার হেডার
         return {
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US,en;q=0.9",
             "Content-Type": "application/json;charset=UTF-8",
             "Origin": "https://draw.ar-lottery01.com",
             "Referer": "https://draw.ar-lottery01.com/",
-            "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(110, 122)}.0.0.0 Safari/537.36",
+            "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(115, 122)}.0.0.0 Safari/537.36",
             "X-Requested-With": "XMLHttpRequest"
         }
 
-    def fetch_data(self):
+    def fetch_with_retry(self):
         payload = {"pageIndex": 1, "pageSize": 50, "type": 30}
-        try:
-            print(f"[{datetime.now()}] Attempting to fetch data with TLS bypass...")
-            # সেশন ব্যবহার করে কুকি হ্যান্ডেল করা
-            with requests.Session() as s:
-                # প্রথমে হোমপেজ হিট করে কুকি সেট করা (সিকিউরিটি বাইপাস)
-                s.get("https://draw.ar-lottery01.com/", impersonate=random.choice(self.browsers))
-                time.sleep(2)
-                
-                response = s.post(
-                    self.api_url,
-                    json=payload,
-                    headers=self.get_secure_headers(),
-                    impersonate=random.choice(self.browsers),
-                    timeout=30
-                )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'data' in data and 'list' in data['data']:
-                    return data['data']['list']
-            
-            print(f"Error: Server responded with status {response.status_code}")
-            return None
-        except Exception as e:
-            print(f"Connection Error: {e}")
-            return None
+        
+        # ব্লকিং এড়াতে ৩ বার ট্রাই করবে
+        for attempt in range(3):
+            try:
+                print(f"[{datetime.now()}] Attempt {attempt+1}: Fetching data...")
+                with requests.Session() as s:
+                    # প্রথমে কুকি নেওয়ার জন্য হোমপেজ ভিজিট
+                    s.get("https://draw.ar-lottery01.com/", impersonate=random.choice(self.profiles))
+                    time.sleep(random.uniform(2, 5))
+                    
+                    response = s.post(
+                        self.target_url,
+                        json=payload,
+                        headers=self.get_headers(),
+                        impersonate=random.choice(self.profiles),
+                        timeout=30
+                    )
 
-    def process_and_save(self, new_items):
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'data' in data and 'list' in data['data']:
+                        return data['data']['list']
+                
+                print(f"Warning: Status {response.status_code}. Retrying...")
+                time.sleep(5)
+            except Exception as e:
+                print(f"Retry {attempt+1} failed: {e}")
+        return None
+
+    def save_data(self, new_items):
         if not new_items:
-            print("No data received from API. It might be blocked.")
+            print("CRITICAL: Failed to bypass protection. No data received.")
             return
 
-        # পুরনো ডাটা পড়া
+        # আগের ডাটা লোড
         history = []
-        if os.path.exists(self.history_file):
+        if os.path.exists(self.db_path):
             try:
-                with open(self.history_file, "r", encoding="utf-8") as f:
+                with open(self.db_path, "r", encoding="utf-8") as f:
                     history = json.load(f)
             except: history = []
 
-        # ডুপ্লিকেট চেক ও নতুন ডাটা যোগ
+        # ডুপ্লিকেট রিমুভ করে নতুন ডাটা অ্যাড
         existing_ids = {str(item.get('issueNumber')) for item in history}
-        added_count = 0
+        added = 0
         for item in new_items:
             if str(item.get('issueNumber')) not in existing_ids:
                 history.append(item)
-                added_count += 1
+                added += 1
 
-        if added_count == 0:
-            print("Database is already up to date. No new records.")
+        if added == 0:
+            print("Status: Database is already up to date.")
             return
 
-        # সর্টিং (লেটেস্ট ডাটা আগে)
-        history = sorted(history, key=lambda x: str(x.get('issueNumber')), reverse=True)[:10000]
+        # লেটেস্ট ২০,০০০ ডাটা পর্যন্ত সেভ রাখবে
+        history = sorted(history, key=lambda x: str(x.get('issueNumber')), reverse=True)[:20000]
 
-        # ডাটাবেজে সেভ (JSON ফাইল)
-        with open(self.history_file, "w", encoding="utf-8") as f:
+        with open(self.db_path, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=4, ensure_ascii=False)
 
-        print(f"Successfully saved {added_count} new entries.")
+        print(f"Success: {added} new records saved to data/ folder.")
         self.generate_report(history)
 
     def generate_report(self, history):
-        """ডাটা থেকে রিপোর্ট তৈরি করা"""
         df = pd.DataFrame(history)
-        latest = df.head(10)[['issueNumber', 'number', 'colour']].to_markdown(index=False)
+        latest_table = df.head(15)[['issueNumber', 'number', 'colour']].to_markdown(index=False)
         
-        report = f"""
-# 📊 Wingo Enterprise Live Report
-**Last Update:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        report_content = f"""
+# 🚀 Wingo Enterprise Intelligence (2026)
+**Last Sync Time:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-### 🕒 Recent Draws
-{latest}
+### 📊 Live Market Data (Last 15 Draws)
+{latest_table}
 
 ---
-*Data stored in: data/wing_history.json*
+*Generated by Market-Analyzer-Bot. Data stored in data/ folder.*
 """
-        with open(self.report_file, "w", encoding="utf-8") as f:
-            f.write(report)
+        with open(self.report_path, "w", encoding="utf-8") as f:
+            f.write(report_content)
 
 if __name__ == "__main__":
     # হিউম্যান সিমুলেশন ডিলে
-    time.sleep(random.randint(5, 12))
-    bot = WingoEnterpriseBot()
-    raw_data = bot.fetch_data()
-    bot.process_and_save(raw_data)
-            
+    time.sleep(random.uniform(5, 10))
+    bot = EnterpriseScraper()
+    final_data = bot.fetch_with_retry()
+    bot.save_data(final_data)
+        
