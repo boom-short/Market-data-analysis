@@ -1,4 +1,4 @@
-name: Wingo Enterprise Scraper 2026
+name: Wingo Enterprise Ultra 2026
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  analyze:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -14,31 +14,31 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install Dependencies
+      - name: Install Tools
         run: |
           python -m pip install --upgrade pip
           pip install curl_cffi pandas tabulate
 
-      - name: Run Scraper Engine
+      - name: Execute Scraper
         run: python scraper.py
 
-      - name: Auto-Save and Sync Data
+      - name: Sync Data to GitHub
         run: |
           git config --global user.name "Market-Analyzer-Bot"
           git config --global user.email "bot@market-data.com"
           
-          # ফাইলগুলো অ্যাড করা হচ্ছে (data এবং reports ফোল্ডারসহ)
+          # Forcefully add data and reports folders
           git add -A
           
           if [[ -n "$(git status --porcelain)" ]]; then
-            git commit -m "Update Market Analytics: $(date +'%Y-%m-%d %H:%M:%S')"
+            git commit -m "Auto-Sync: $(date +'%Y-%m-%d %H:%M:%S')"
             git push
           else
-            echo "No changes found. Data might be blocked or already up-to-date."
+            echo "No new data found to commit."
           fi
           
