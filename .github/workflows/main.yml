@@ -2,43 +2,54 @@ name: Wingo Enterprise Scraper 2026
 
 on:
   schedule:
-    - cron: '*/15 * * * *' # প্রতি ১৫ মিনিট পর পর ডাটা চেক করবে
-  workflow_dispatch: # মোবাইল থেকে বাটন টিপে রান করার জন্য
+    - cron: '*/15 * * * *' # প্রতি ১৫ মিনিট পর পর অটোমেটিক চলবে
+  workflow_dispatch: # মোবাইল থেকে বাটন টিপে ম্যানুয়ালি রান করার অপশন
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # ডাটা সেভ করার জন্য পারমিশন
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository Code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python Environment
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          # cache: pip লাইনটি সরিয়ে দেওয়া হয়েছে এরর ফিক্স করার জন্য
+          # ক্যাশ বাদ দেওয়া হয়েছে যাতে ফাইল খুঁজে না পাওয়ার এরর না আসে
 
-      - name: Install Advanced Scraper Tools
+      - name: Install Advanced Scraping Tools
         run: |
           python -m pip install --upgrade pip
           pip install curl_cffi pandas tabulate
 
-      - name: Run Enterprise Scraper
-        run: python core_engine.py
+      - name: Execute Scraper with Security Bypass
+        run: |
+          # ফাইলের নাম scraper.py বা core_engine.py যাই হোক এটি খুঁজে নিবে
+          if [ -f "scraper.py" ]; then
+            python scraper.py
+          elif [ -f "core_engine.py" ]; then
+            python core_engine.py
+          else
+            echo "CRITICAL ERROR: No python script found!"
+            ls -R # ডিবাগিং এর জন্য ফাইল লিস্ট দেখাবে
+            exit 1
+          fi
 
-      - name: Commit and Push Changes
+      - name: Secure Data Commit and Push
         run: |
           git config --global user.name "Market-Analyzer-Bot"
-          git config --global user.email "bot@market.com"
+          git config --global user.email "bot@market-data.com"
           
-          # শুধুমাত্র পরিবর্তন থাকলেই পুশ করবে
+          # শুধুমাত্র যদি নতুন ডাটা থাকে তবেই সেভ করবে
+          git add data/*.json reports/*.md 2>/dev/null || git add wingo_history.json 2>/dev/null
+          
           if [[ -n "$(git status --porcelain)" ]]; then
-            git add data/*.json reports/*.md
-            git commit -m "Update Market Analytics: $(date)"
+            git commit -m "Update Market Analytics: $(date +'%Y-%m-%d %H:%M:%S')"
             git push
           else
-            echo "No new data found to update."
+            echo "No new market data identified. Skipping push."
           fi
           
