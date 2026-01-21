@@ -1,12 +1,12 @@
-name: Wingo Live Scraper
+name: Wingo Browser Scraper
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/10 * * * *' # প্রতি ১০ মিনিট (ব্রাউজার লোড হতে সময় লাগে তাই ১০ মিনিট ভালো)
   workflow_dispatch:
 
 jobs:
-  run_scraper:
+  scrape:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -21,21 +21,16 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install requests cloudscraper
+          pip install playwright
+          playwright install chromium --with-deps
 
-      - name: Run Scraper Script
+      - name: Run Scraper
         run: python scraper.py
 
-      - name: Commit and Push Changes
+      - name: Commit and Push
         run: |
           git config --global user.name "Wingo-Bot"
           git config --global user.email "bot@github.com"
-          
-          if [ ! -f wingo_history.json ]; then
-            echo "{}" > wingo_history.json
-          fi
-          
           git add wingo_history.json
-          git commit -m "Update Wingo Data: $(date)" || echo "No changes to commit"
+          git commit -m "Update Data via Browser: $(date)" || echo "No changes"
           git push
-          
