@@ -1,63 +1,108 @@
 import json
 import asyncio
-import requests
+import os
+import random
 from playwright.async_api import async_playwright
 
-# ফ্রি প্রক্সি সোর্স থেকে আইপি সংগ্রহের ফাংশন
-def get_proxies():
-    try:
-        response = requests.get("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all")
-        if response.status_code == 200:
-            return response.text.splitlines()
-    except:
-        return ["http://38.154.227.167:5868", "http://154.236.177.121:1981"]
-
-async def fetch_data():
-    proxies = get_proxies()
-    print(f"Found {len(proxies)} proxies. Trying to bypass...")
-    
+async def run_scraper():
     async with async_playwright() as p:
-        success = False
-        for i in range(min(5, len(proxies))): # প্রথম ৫টি প্রক্সি ট্রাই করবে
-            proxy = proxies[i]
-            if not proxy.startswith("http"):
-                proxy = f"http://{proxy}"
-            
-            print(f"Attempt {i+1} using: {proxy}")
-            
-            try:
-                browser = await p.chromium.launch(headless=True, proxy={"server": proxy})
-                context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                page = await context.new_page()
-
-                # সাইটে যাওয়া
-                await page.goto("https://draw.ar-lottery01.com/", wait_until="networkidle", timeout=30000)
-                await asyncio.sleep(5)
-
-                API_URL = 'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json'
-                payload = {"pageIndex": 1, "pageSize": 20, "type": 30}
-                
-                script = f"async () => {{ const res = await fetch('{API_URL}', {{ method: 'POST', headers: {{ 'Content-Type': 'application/json' }}, body: JSON.stringify({json.dumps(payload)}) }}); return await res.json(); }}"
-                
-                response_json = await page.evaluate(script)
-
-                if response_json:
-                    with open("wingo_history.json", "w", encoding="utf-8") as f:
-                        json.dump(response_json, f, indent=4, ensure_ascii=False)
-                    print("Bingo! Data fetched successfully.")
-                    success = True
-                    await browser.close()
-                    break
-                
-                await browser.close()
-            except Exception as e:
-                print(f"Proxy {proxy} failed. Error: {e}")
-                continue
+        # ব্রাউজার এমনভাবে লঞ্চ করা যাতে বট ডিটেকশন ফেইল করে
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--disable-infobars',
+                '--no-sandbox'
+            ]
+        )
         
-        if not success:
-            with open("wingo_history.json", "w", encoding="utf-8") as f:
-                json.dump({"status": "All Proxies Failed", "time": "2026-01-21"}, f, indent=4)
+        # আপনার ফোনের মতো একটি এনভায়রনমেন্ট তৈরি
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+            viewport={'width': 360, 'height': 800},
+            device_scale_factor=3,
+            is_mobile=True,
+            has_touch=True,
+            locale="en-US",
+            timezone_id="Asia/Dhaka"
+        )
+
+        # অ্যান্টি-ডিটেকশন স্ক্রিপ্ট ইনজেক্ট করা
+        await context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.chrome = { runtime: {} };
+            Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+        """)
+
+        page = await context.new_page()
+        
+        try:
+            print("গুগলের মাধ্যমে রিডাইরেক্ট হচ্ছে...")
+            await page.goto("https://www.google.com")
+            await asyncio.sleep(2)
+            
+            print("উইনগো গেমে প্রবেশ করা হচ্ছে...")
+            # আপনার মেইন ড্র পেজ ইউআরএল
+            target_url = "https://draw.ar-lottery01.com/"
+            await page.goto(target_url, wait_until="networkidle", timeout=90000)
+            
+            # মানুষের মতো আচরণ করতে স্ক্রল করা
+            await page.mouse.wheel(0, 500)
+            await asyncio.sleep(random.uniform(10, 15))
+
+            # API থেকে ডাটা সংগ্রহের চ্যালেঞ্জ নেওয়া
+            API_URL = 'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json'
+            payload = {"pageIndex": 1, "pageSize": 50, "type": 30}
+
+            # ব্রাউজারের ভেতর থেকে রিকোয়েস্ট পাঠানো
+            response_data = await page.evaluate(f"""
+                async () => {{
+                    try {{
+                        const res = await fetch('{API_URL}', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/json;charset=UTF-8' }},
+                            body: JSON.stringify({json.dumps(payload)})
+                        }});
+                        return await res.json();
+                    }} catch (e) {{
+                        return {{ error: e.message }};
+                    }}
+                }}
+            """)
+
+            # ডাটা প্রসেসিং এবং সেভ করা
+            if response_data and 'data' in response_data:
+                history_file = "wingo_history.json"
+                # ডাটা রিড এবং অ্যাপেন্ড করার লজিক
+                current_records = []
+                if os.path.exists(history_file):
+                    try:
+                        with open(history_file, 'r') as f:
+                            current_records = json.load(f)
+                    except: pass
+                
+                # নতুন ডাটা মার্জ করা
+                new_list = response_data['data']['list']
+                existing_ids = {r['issueNumber'] for r in current_records}
+                for item in new_list:
+                    if item['issueNumber'] not in existing_ids:
+                        current_records.append(item)
+                
+                # সর্বোচ্চ ১০০০টি ডাটা সেভ রাখা
+                current_records = sorted(current_records, key=lambda x: x['issueNumber'], reverse=True)[:1000]
+
+                with open(history_file, 'w', encoding='utf-8') as f:
+                    json.dump(current_records, f, indent=4, ensure_ascii=False)
+                
+                print(f"সফল! বর্তমানে মোট {len(current_records)}টি ডাটা জমা আছে।")
+            else:
+                print("ডাটা পাওয়া যায়নি, সিকিউরিটি চ্যালেঞ্জ সামনে এসেছে।")
+
+        except Exception as e:
+            print(f"Error: {e}")
+        
+        await browser.close()
 
 if __name__ == "__main__":
-    asyncio.run(fetch_data())
+    asyncio.run(run_scraper())
     
