@@ -1,4 +1,4 @@
 {
-    "status": "Failed",
-    "error": "Page.evaluate: SyntaxError: Unexpected token '<', \"<!DOCTYPE \"... is not valid JSON"
+    "status": "Table not found",
+    "preview": "403\nForbidden_"
 }
