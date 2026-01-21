@@ -1,4 +1,5 @@
 {
-    "error": "API Blocked",
-    "status_code": 403
+    "error": "Still Blocked",
+    "status_code": 403,
+    "response_text": "<!DOCTYPE html>\n<html lang=\"en\">\n\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>403 Forbidden</title>\n    <style>\n        @import url(\"https://fonts.googleapis.com/css?family=Press+Start+2P\");\n\n        html,\n        body {\n            width: 100%;\n            height: 100%;\n            margin: 0;\n        }\n\n        * {\n            font-family: 'Press Start 2P', cursive;\n            box-sizing: border-box;\n        }\n\n       "
 }
