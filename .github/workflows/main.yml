@@ -1,37 +1,37 @@
-name: Wingo Smart Scraper
+name: Wingo Enterprise Scraper
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/30 * * * *' # প্রতি ৩০ মিনিট পর পর বড় ডাটা সিঙ্ক করবে
   workflow_dispatch:
 
 jobs:
-  scrape:
+  build_and_scrape:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.10'
 
-      - name: Install Dependencies
+      - name: Install Enterprise Tools
         run: |
-          pip install playwright requests
+          pip install playwright
           playwright install chromium --with-deps
 
-      - name: Run Scraper
+      - name: Execute Scraper
         run: python scraper.py
 
-      - name: Commit and Push
+      - name: Commit Records
         run: |
-          git config --global user.name "Wingo-Bot"
-          git config --global user.email "bot@github.com"
+          git config --global user.name "Market-Analyzer-Bot"
+          git config --global user.email "bot@market.com"
           git add wingo_history.json
-          git commit -m "Smart Proxy Update: $(date)" || echo "No changes"
+          git commit -m "Automated Market Update: $(date)" || echo "No changes"
           git push
           
