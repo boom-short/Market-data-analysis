@@ -1,5 +1,4 @@
 {
-    "status": "Failed",
-    "proxy": "http://50.174.7.155:80",
-    "error": "Page.goto: net::ERR_TIMED_OUT at https://draw.ar-lottery01.com/\nCall log:\n  - navigating to \"https://draw.ar-lottery01.com/\", waiting until \"networkidle\"\n"
+    "status": "All Proxies Failed",
+    "time": "2026-01-21"
 }
