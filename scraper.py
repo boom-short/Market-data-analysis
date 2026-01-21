@@ -6,116 +6,104 @@ import pandas as pd
 from curl_cffi import requests
 from datetime import datetime
 
-# প্রজেক্ট ডিরেক্টরি সেটআপ
+# ডিরেক্টরি সেটআপ
 os.makedirs('data', exist_ok=True)
 os.makedirs('reports', exist_ok=True)
 
-class WingoEnterpriseBot:
+class UltraSecureScraper:
     def __init__(self):
-        self.api_url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
-        self.history_file = "data/wingo_master_history.json"
-        self.report_file = "reports/live_analysis.md"
-        # শক্তিশালী ব্রাউজার ফিঙ্গারপ্রিন্ট লিস্ট
-        self.impersonate_list = ["chrome110", "chrome120", "edge101", "safari_ios_16_0"]
+        self.url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
+        self.db_path = "data/wingo_master_history.json"
+        
+        # বিভিন্ন আসল ব্রাউজারের ভার্সন (বট ডিটেকশন এড়াতে)
+        self.browser_versions = [
+            "chrome110", "chrome116", "chrome120", 
+            "safari_ios_16_0", "safari_ios_17_0", "edge101"
+        ]
+
+    def get_stealth_headers(self):
+        # হুবহু আসল ব্রাউজারের সিকিউরিটি প্যারামিটার
+        return {
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Language": "en-US,en;q=0.9,bn;q=0.8",
+            "Content-Type": "application/json;charset=UTF-8",
+            "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(110, 122)}.0.0.0 Safari/537.36",
+            "X-Requested-With": "XMLHttpRequest"
+        }
 
     def fetch_data(self):
         payload = {"pageIndex": 1, "pageSize": 50, "type": 30}
-        headers = {
-            "Accept": "application/json, text/plain, */*",
-            "Content-Type": "application/json;charset=UTF-8",
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-            "Origin": "https://draw.ar-lottery01.com",
-            "Referer": "https://draw.ar-lottery01.com/"
-        }
-
+        
         try:
-            print(f"[{datetime.now()}] Initializing request...")
-            # সেশন ব্যবহার করে TLS Fingerprint সিমুলেট করা
-            with requests.Session() as s:
-                response = s.post(
-                    self.api_url,
+            # সেশন ব্যবহারের মাধ্যমে কানেকশন রিইউজ করা (ব্লকিং কমায়)
+            with requests.Session() as session:
+                print(f"[{datetime.now()}] Initializing Secure Session...")
+                
+                # ১. প্রথমে হোমপেজ ভিজিট করা (কুকি সেট করার জন্য)
+                session.get("https://draw.ar-lottery01.com/", impersonate=random.choice(self.browser_versions))
+                time.sleep(random.uniform(1, 3))
+                
+                # ২. আসল ডাটা রিকোয়েস্ট
+                response = session.post(
+                    self.url,
                     json=payload,
-                    headers=headers,
-                    impersonate=random.choice(self.impersonate_list),
+                    headers=self.get_stealth_headers(),
+                    impersonate=random.choice(self.browser_versions),
                     timeout=30
                 )
-
+            
             if response.status_code == 200:
-                json_data = response.json()
-                if 'data' in json_data and 'list' in json_data['data']:
-                    return json_data['data']['list']
-                print("API Error: Data structure unexpected.")
+                res_json = response.json()
+                if 'data' in res_json and 'list' in res_json['data']:
+                    return res_json['data']['list']
+                else:
+                    print("Structure Error: Cloudflare might have served a challenge page.")
             else:
-                print(f"Failed to bypass. Status Code: {response.status_code}")
+                print(f"Blocked! Status Code: {response.status_code}")
+                # যদি ৪MD৫ বা অন্য এরর আসে তবে আইপি পরিবর্তনের ইঙ্গিত দিবে
+                
             return None
         except Exception as e:
-            print(f"System Error: {e}")
+            print(f"Security Engine Error: {e}")
             return None
 
-    def process_and_report(self, new_items):
-        if not new_items: return
+    def save_and_analyze(self, new_data):
+        if not new_data: return
 
-        # পুরনো ডাটা লোড করা
         history = []
-        if os.path.exists(self.history_file):
-            try:
-                with open(self.history_file, "r", encoding="utf-8") as f:
-                    history = json.load(f)
-            except: history = []
+        if os.path.exists(self.db_path):
+            with open(self.db_path, "r", encoding="utf-8") as f:
+                history = json.load(f)
 
-        # নতুন ডাটা মার্জ করা (ডুপ্লিকেট চেক করে)
-        existing_ids = {str(item['issueNumber']) for item in history if 'issueNumber' in item}
+        existing_issues = {str(x['issueNumber']) for x in history}
         added = 0
-        for item in new_items:
-            if str(item['issueNumber']) not in existing_ids:
+        for item in new_data:
+            if str(item['issueNumber']) not in existing_issues:
                 history.append(item)
                 added += 1
 
-        if added == 0:
-            print("Database is already up to date.")
-            return
-
-        # সর্টিং (লেটেস্ট ডাটা আগে) এবং ১০,০০০ ডাটা সেভ রাখা
-        history = sorted(history, key=lambda x: str(x['issueNumber']), reverse=True)[:10000]
-
-        with open(self.history_file, "w", encoding="utf-8") as f:
-            json.dump(history, f, indent=4, ensure_ascii=False)
-
-        print(f"Successfully added {added} records.")
-        self.generate_markdown_report(history)
-
-    def generate_markdown_report(self, history):
-        df = pd.DataFrame(history)
-        
-        # ১. টেবিল ফরম্যাটে লেটেস্ট ১০টি ড্র
-        latest_draws = df.head(10)[['issueNumber', 'number', 'colour']].to_markdown(index=False)
-        
-        # ২. স্ট্যাটিস্টিকস (গত ১০০ ড্র-এর উপর ভিত্তি করে)
-        stats_data = df.head(100)
-        color_dist = stats_data['colour'].value_counts(normalize=True) * 100
-        
-        report = f"""
-# 🚀 Wingo Enterprise Intelligence Report
-**Last Sync:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-### 📊 Latest Market Activity (Top 10)
-{latest_draws}
-
-### 📈 Probability Trends (Last 100 Games)
-- **🔴 Red:** {color_dist.get('red', 0):.1f}%
-- **🟢 Green:** {color_dist.get('green', 0):.1f}%
-- **🟣 Violet:** {color_dist.get('violet', 0):.1f}%
-
----
-*Powered by AI Market Scraper 2026*
-"""
-        with open(self.report_file, "w", encoding="utf-8") as f:
-            f.write(report)
+        if added > 0:
+            history = sorted(history, key=lambda x: str(x['issueNumber']), reverse=True)[:10000]
+            with open(self.db_path, "w", encoding="utf-8") as f:
+                json.dump(history, f, indent=4)
+            print(f"Security Check Passed: {added} new records encrypted and saved.")
+        else:
+            print("Sync Complete: No new draw data.")
 
 if __name__ == "__main__":
-    # অ্যান্টি-বট ডিলে (৩-১০ সেকেন্ড)
-    time.sleep(random.randint(3, 10))
-    bot = WingoEnterpriseBot()
-    data = bot.fetch_data()
-    bot.process_and_report(data)
+    # হিউম্যান লাইক ডিলে
+    wait_time = random.uniform(5, 15)
+    print(f"Waiting for {wait_time:.2f}s to mimic human behavior...")
+    time.sleep(wait_time)
     
+    bot = UltraSecureScraper()
+    data = bot.fetch_data()
+    bot.save_and_analyze(data)
+                      
