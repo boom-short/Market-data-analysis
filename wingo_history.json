@@ -1,4 +1,5 @@
 {
-    "status": "Table not found",
-    "preview": "403\nForbidden_"
+    "status": "Failed",
+    "proxy": "http://50.174.7.155:80",
+    "error": "Page.goto: net::ERR_TIMED_OUT at https://draw.ar-lottery01.com/\nCall log:\n  - navigating to \"https://draw.ar-lottery01.com/\", waiting until \"networkidle\"\n"
 }
