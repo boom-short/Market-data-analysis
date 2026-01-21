@@ -9,7 +9,7 @@ jobs:
   run_scraper:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # গিটহাবকে লেখার অনুমতি দিবে
+      contents: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -19,8 +19,9 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install Requirements
-        run: pip install requests
+      - name: Install Dependencies
+        run: |
+          pip install requests cloudscraper
 
       - name: Run Scraper Script
         run: python scraper.py
@@ -30,7 +31,6 @@ jobs:
           git config --global user.name "Wingo-Bot"
           git config --global user.email "bot@github.com"
           
-          # যদি ফাইল না থাকে, তবে একটি খালি ফাইল তৈরি করবে এরর এড়াতে
           if [ ! -f wingo_history.json ]; then
             echo "{}" > wingo_history.json
           fi
