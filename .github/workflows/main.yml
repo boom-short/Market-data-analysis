@@ -1,17 +1,17 @@
-name: Wingo Stealth Scraper
+name: Wingo Final Scraper
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
-  workflow_dispatch:
+    - cron: '*/10 * * * *' # প্রতি ১০ মিনিট অন্তর চলবে
+  workflow_dispatch: # হাতে চালানোর অপশন
 
 jobs:
-  scrape:
+  scrape_and_push:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
       - name: Setup Python
@@ -19,19 +19,26 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install Dependencies
+      - name: Install System Dependencies
         run: |
-          pip install playwright playwright-stealth
+          pip install playwright
           playwright install chromium --with-deps
 
-      - name: Run Scraper
+      - name: Run Python Scraper
         run: python scraper.py
 
-      - name: Commit and Push
+      - name: Save and Commit Data
         run: |
           git config --global user.name "Wingo-Bot"
           git config --global user.email "bot@github.com"
-          git add wingo_history.json
-          git commit -m "Bypassed Cloudflare: $(date)" || echo "No changes"
-          git push
+          
+          # ফাইল তৈরি হয়েছে কি না দেখে পুশ করা
+          if [ -f wingo_history.json ]; then
+            git add wingo_history.json
+            git commit -m "Live Market Data Update: $(date)" || echo "No changes to commit"
+            git push
+          else
+            echo "Error: wingo_history.json was not created."
+            exit 1
+          fi
           
