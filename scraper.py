@@ -1,42 +1,42 @@
 import json
 import asyncio
+import os
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async
 
 async def fetch_data():
     async with async_playwright() as p:
-        # ব্রাউজার লঞ্চ
+        # ব্রাউজার লঞ্চ করা
         browser = await p.chromium.launch(headless=True)
-        # মোবাইল বা বড় স্ক্রিন যেকোনো একটি ইমুলেট করা
+        
+        # আসল ব্রাউজারের মতো এনভায়রনমেন্ট তৈরি
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            viewport={'width': 1280, 'height': 720}
         )
         
         page = await context.new_page()
-        
-        # স্টেলথ মোড চালু করা (বট ডিটেকশন এড়াতে)
-        await stealth_async(page)
 
         try:
-            # সরাসরি এপিআই লিঙ্কে যাওয়ার বদলে আগে মেইন সাইটে যাওয়া
+            # মেইন সাইটে যাওয়া যাতে কুকি সেটআপ হয়
+            print("Connecting to Wingo site...")
             await page.goto("https://draw.ar-lottery01.com/", wait_until="networkidle", timeout=60000)
             
-            # ক্লাউডফেয়ার যেন আমাদের আসল ইউজার মনে করে তাই একটু সময় দেওয়া
-            await asyncio.sleep(15)
+            # ক্লাউডফেয়ার চ্যালেঞ্জের জন্য ১০ সেকেন্ড অপেক্ষা
+            await asyncio.sleep(10)
 
-            # এবার জাভাস্ক্রিপ্ট ব্যবহার করে ডাটা রিকোয়েস্ট করা
+            # ব্রাউজার থেকে এপিআই কল করা
             API_URL = 'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json'
             payload = {"pageIndex": 1, "pageSize": 20, "type": 30}
             
-            # ব্রাউজারের ভেতর থেকে fetch অপারেশন চালানো
+            # সরাসরি ব্রাউজার কনসোল থেকে ডাটা রিকোয়েস্ট
             script = f"""
                 async () => {{
-                    const res = await fetch('{API_URL}', {{
+                    const response = await fetch('{API_URL}', {{
                         method: 'POST',
-                        headers: {{ 'Content-Type': 'application/json' }},
+                        headers: {{ 'Content-Type': 'application/json;charset=UTF-8' }},
                         body: JSON.stringify({json.dumps(payload)})
                     }});
-                    return await res.json();
+                    return await response.json();
                 }}
             """
             
@@ -47,16 +47,13 @@ async def fetch_data():
                     json.dump(response_json, f, indent=4, ensure_ascii=False)
                 print("সফলভাবে ডাটা সংগ্রহ করা হয়েছে!")
             else:
-                print("কোনো ডাটা পাওয়া যায়নি।")
+                raise Exception("Empty response from API")
 
         except Exception as e:
+            # এরর হলেও ফাইল আপডেট করবে যাতে আপনি বুঝতে পারেন কি সমস্যা হচ্ছে
             with open("wingo_history.json", "w", encoding="utf-8") as f:
-                json.dump({
-                    "status": "Error",
-                    "message": str(e),
-                    "hint": "Cloudflare challenge still active"
-                }, f, indent=4)
-            print(f"Error occurred: {e}")
+                json.dump({"status": "Failed", "error": str(e)}, f, indent=4)
+            print(f"Error: {e}")
         
         await browser.close()
 
