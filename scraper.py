@@ -1,108 +1,70 @@
 import json
-import asyncio
 import os
+import time
 import random
-from playwright.async_api import async_playwright
+from curl_cffi import requests
 
-async def run_scraper():
-    async with async_playwright() as p:
-        # ব্রাউজার এমনভাবে লঞ্চ করা যাতে বট ডিটেকশন ফেইল করে
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
-                '--disable-blink-features=AutomationControlled',
-                '--disable-infobars',
-                '--no-sandbox'
-            ]
-        )
+# এই ফাংশনটি একদম আসল ব্রাউজারের মতো করে ডাটা আনবে
+def fetch_wingo_live():
+    url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
+    
+    # ব্রাউজারের হুবহু নকল (Impersonate Chrome 120)
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/json;charset=UTF-8",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        "Origin": "https://draw.ar-lottery01.com",
+        "Referer": "https://draw.ar-lottery01.com/"
+    }
+    
+    payload = {"pageIndex": 1, "pageSize": 50, "type": 30}
+
+    try:
+        # এখানে impersonate="chrome120" ব্যবহার করা হয়েছে যা TLS Fingerprint পাল্টে দেয়
+        response = requests.post(url, json=payload, headers=headers, impersonate="chrome120", timeout=30)
         
-        # আপনার ফোনের মতো একটি এনভায়রনমেন্ট তৈরি
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-            viewport={'width': 360, 'height': 800},
-            device_scale_factor=3,
-            is_mobile=True,
-            has_touch=True,
-            locale="en-US",
-            timezone_id="Asia/Dhaka"
-        )
+        if response.status_code == 200:
+            new_data = response.json()
+            process_and_save(new_data)
+        else:
+            print(f"Failed with Status: {response.status_code}")
+            # যদি এখনো ৪০৩ আসে, তবে বুঝবেন আইপি ব্লক
+    except Exception as e:
+        print(f"Error occurred: {e}")
 
-        # অ্যান্টি-ডিটেকশন স্ক্রিপ্ট ইনজেক্ট করা
-        await context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            window.chrome = { runtime: {} };
-            Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-        """)
+def process_and_save(new_json):
+    file_name = "wingo_history.json"
+    if 'data' not in new_json: return
 
-        page = await context.new_page()
-        
-        try:
-            print("গুগলের মাধ্যমে রিডাইরেক্ট হচ্ছে...")
-            await page.goto("https://www.google.com")
-            await asyncio.sleep(2)
-            
-            print("উইনগো গেমে প্রবেশ করা হচ্ছে...")
-            # আপনার মেইন ড্র পেজ ইউআরএল
-            target_url = "https://draw.ar-lottery01.com/"
-            await page.goto(target_url, wait_until="networkidle", timeout=90000)
-            
-            # মানুষের মতো আচরণ করতে স্ক্রল করা
-            await page.mouse.wheel(0, 500)
-            await asyncio.sleep(random.uniform(10, 15))
+    # পুরানো ডাটা লোড করা
+    if os.path.exists(file_name):
+        with open(file_name, "r", encoding="utf-8") as f:
+            try:
+                history = json.load(f)
+            except: history = []
+    else:
+        history = []
 
-            # API থেকে ডাটা সংগ্রহের চ্যালেঞ্জ নেওয়া
-            API_URL = 'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json'
-            payload = {"pageIndex": 1, "pageSize": 50, "type": 30}
+    # নতুন ডাটা মার্জ করা
+    existing_issues = {str(item.get('issueNumber')) for item in history}
+    new_items = new_json['data']['list']
+    
+    count = 0
+    for item in new_items:
+        if str(item.get('issueNumber')) not in existing_issues:
+            history.append(item)
+            count += 1
+    
+    # লেটেস্ট ১০০০টি ডাটা সেভ রাখা
+    history = sorted(history, key=lambda x: str(x.get('issueNumber')), reverse=True)[:1000]
 
-            # ব্রাউজারের ভেতর থেকে রিকোয়েস্ট পাঠানো
-            response_data = await page.evaluate(f"""
-                async () => {{
-                    try {{
-                        const res = await fetch('{API_URL}', {{
-                            method: 'POST',
-                            headers: {{ 'Content-Type': 'application/json;charset=UTF-8' }},
-                            body: JSON.stringify({json.dumps(payload)})
-                        }});
-                        return await res.json();
-                    }} catch (e) {{
-                        return {{ error: e.message }};
-                    }}
-                }}
-            """)
-
-            # ডাটা প্রসেসিং এবং সেভ করা
-            if response_data and 'data' in response_data:
-                history_file = "wingo_history.json"
-                # ডাটা রিড এবং অ্যাপেন্ড করার লজিক
-                current_records = []
-                if os.path.exists(history_file):
-                    try:
-                        with open(history_file, 'r') as f:
-                            current_records = json.load(f)
-                    except: pass
-                
-                # নতুন ডাটা মার্জ করা
-                new_list = response_data['data']['list']
-                existing_ids = {r['issueNumber'] for r in current_records}
-                for item in new_list:
-                    if item['issueNumber'] not in existing_ids:
-                        current_records.append(item)
-                
-                # সর্বোচ্চ ১০০০টি ডাটা সেভ রাখা
-                current_records = sorted(current_records, key=lambda x: x['issueNumber'], reverse=True)[:1000]
-
-                with open(history_file, 'w', encoding='utf-8') as f:
-                    json.dump(current_records, f, indent=4, ensure_ascii=False)
-                
-                print(f"সফল! বর্তমানে মোট {len(current_records)}টি ডাটা জমা আছে।")
-            else:
-                print("ডাটা পাওয়া যায়নি, সিকিউরিটি চ্যালেঞ্জ সামনে এসেছে।")
-
-        except Exception as e:
-            print(f"Error: {e}")
-        
-        await browser.close()
+    with open(file_name, "w", encoding="utf-8") as f:
+        json.dump(history, f, indent=4, ensure_ascii=False)
+    
+    print(f"Added {count} new records. Total: {len(history)}")
 
 if __name__ == "__main__":
-    asyncio.run(run_scraper())
+    # মানুষের মতো আচরণ করতে রেন্ডম ওয়েট
+    time.sleep(random.randint(5, 15))
+    fetch_wingo_live()
     
