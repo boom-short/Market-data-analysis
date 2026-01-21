@@ -1,4 +1,4 @@
-name: Wingo Visual Scraper
+name: Wingo Stealth Scraper
 
 on:
   schedule:
@@ -21,7 +21,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install playwright
+          pip install playwright playwright-stealth
           playwright install chromium --with-deps
 
       - name: Run Scraper
@@ -32,6 +32,6 @@ jobs:
           git config --global user.name "Wingo-Bot"
           git config --global user.email "bot@github.com"
           git add wingo_history.json
-          git commit -m "Capture Visual Data: $(date)" || echo "No changes"
+          git commit -m "Bypassed Cloudflare: $(date)" || echo "No changes"
           git push
           
